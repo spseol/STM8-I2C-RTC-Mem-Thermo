@@ -1,5 +1,6 @@
 // (c) Michal Dudka
 #include "swi2c.h"
+#include "delay.h"
 
 // read num bytes to array data from slave with desired I2C slv_addres, from desired pointer (address)
 // Generates I2C sequence SLA+W + 1Byte (Address) + RST + SLA+R + num*Byte (data)
@@ -7,13 +8,15 @@
 // returns 0xff if bus error (blocked bus)
 // returns 0x01 if slave not present (NACK)
 // returns 0x00 if success
-// slave address in 8bit representation (left aligned 7bit value)
+// slave address in 8bit representation (right aligned 7bit value)
 uint8_t swi2c_read_buf(uint8_t slv_addr, uint8_t address, uint8_t * data,
                        uint16_t num)
 {
     uint8_t i = 0, bit;
     uint8_t ack;
     uint8_t mask;
+
+    slv_addr = slv_addr << 1;
 
 // --- Generate START ---
     if (swi2c_START()) {
@@ -109,13 +112,16 @@ uint8_t swi2c_read_buf(uint8_t slv_addr, uint8_t address, uint8_t * data,
 // returns 0xff if bus error (blocked bus)
 // returns 0x01 if slave not present (NACK)
 // returns 0x00 if success
-// slave address in 8bit representation (left aligned 7bit value)
+// slave address in 8bit representation (right aligned 7bit value)
 uint8_t swi2c_write_buf(uint8_t slv_addr, uint8_t address, uint8_t * data,
                         uint16_t num)
 {
     uint8_t i;
     uint8_t ack;
     uint8_t mask;
+
+
+    slv_addr = slv_addr << 1;
 
 // --- Generate START ---
     if (swi2c_START()) {
@@ -179,7 +185,7 @@ uint8_t swi2c_write_buf(uint8_t slv_addr, uint8_t address, uint8_t * data,
 
 
 // test (ACK/NACK) of selected I2C slave address (like a ping - testing slave present on bus)
-// slave address in 8bit representation (left aligned 7bit value)
+// slave address in 8bit representation (right aligned 7bit value)
 // returns 0 if is slave present on bus
 // returns 1 if slave is not present on bus
 // returns 0xff if timeout error
@@ -188,6 +194,8 @@ uint8_t swi2c_test_slave(uint8_t slvaddr)
 {
     uint8_t ack;
     uint8_t mask = 1 << 7;
+
+    slvaddr <<= 1;
     if (swi2c_START()) {
         return 0xaa;
     }
@@ -202,6 +210,28 @@ uint8_t swi2c_test_slave(uint8_t slvaddr)
         return 0xff;
     }
     return ack;
+}
+#include <stdio.h>
+// test all addresses and if lives add it to array
+// returns 0 if scan i done
+// returns 0xff if timeout error
+// returns 0xaa if busy bus
+uint8_t swi2c_scan_bus(uint8_t * addresses)
+{
+    uint8_t counter = 0;
+    uint8_t ret = 0;
+
+    for (uint8_t slvaddr = 0; slvaddr < 128; slvaddr++) {
+        ret = swi2c_test_slave(slvaddr<<1);
+        if (ret == 0) {
+            addresses[counter++] = slvaddr;
+        } else if (ret != 1) {
+            return ret;
+            printf("neeeeeeeee\n");
+        }
+    }
+    addresses[counter] = 0xFF;
+    return 0;
 }
 
 // initialise SDA and SCL pins to Outputs with Open Drain
